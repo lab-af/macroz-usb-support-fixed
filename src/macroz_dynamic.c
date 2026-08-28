@@ -224,19 +224,34 @@ K_WORK_DELAYABLE_DEFINE(macro_work, macro_work_handler);
 
 static void macro_work_handler(struct k_work *work) {
     ARG_UNUSED(work);
+
     struct macroz_macro_step action;
     bool releasing;
+    uint16_t delay_ms;
 
     k_mutex_lock(&state_lock, K_FOREVER);
+
+    /*
+     * Start the next queued macro when no macro is running.
+     */
     if (!runner_active) {
-        while (queue_count > 0 && !runner_active) {
+        while (queue_count > 0) {
             uint8_t macro_index = macro_queue[queue_head];
+
             queue_head = (queue_head + 1) % MACROZ_QUEUE_SIZE;
             queue_count--;
-            memcpy(&runner_macro, &active_config.macros[macro_index], sizeof(runner_macro));
+
+            memcpy(&runner_macro,
+                   &active_config.macros[macro_index],
+                   sizeof(runner_macro));
+
             runner_step = 0;
             runner_releasing = false;
             runner_active = runner_macro.length > 0;
+
+            if (runner_active) {
+                break;
+            }
         }
     }
 
@@ -245,24 +260,71 @@ static void macro_work_handler(struct k_work *work) {
         return;
     }
 
+    /*
+     * Get the current sequence.
+     */
     action = runner_macro.steps[runner_step];
     releasing = runner_releasing;
-    runner_releasing = !runner_releasing;
-    if (releasing) {
+    delay_ms = action.delay_ms;
+
+    LOG_INF(
+        "Macro step %u/%u: page=0x%02X usage=0x%04X mod=0x%02X delay=%u",
+        runner_step + 1,
+        runner_macro.length,
+        action.usage_page,
+        action.usage,
+        action.modifiers,
+        action.delay_ms
+    );
+
+    if (!releasing) {
+        /*
+         * PRESS current sequence.
+         */
+        runner_releasing = true;
+    } else {
+        /*
+         * RELEASE current sequence.
+         */
+        runner_releasing = false;
         runner_step++;
+
         if (runner_step >= runner_macro.length) {
             runner_active = false;
         }
     }
+
     k_mutex_unlock(&state_lock);
 
-    uint32_t encoded = encoded_action(action.usage_page, action.usage, action.modifiers);
-    raise_zmk_keycode_state_changed_from_encoded(encoded, !releasing, k_uptime_get());
+    uint32_t encoded =
+        encoded_action(
+            action.usage_page,
+            action.usage,
+            action.modifiers
+        );
+
+    raise_zmk_keycode_state_changed_from_encoded(
+        encoded,
+        !releasing,
+        k_uptime_get()
+    );
 
     if (!releasing) {
-        k_work_reschedule(&macro_work, MACROZ_TAP_DURATION);
+        /*
+         * Keep the key combination pressed.
+         */
+        k_work_reschedule(
+            &macro_work,
+            MACROZ_TAP_DURATION
+        );
     } else {
-        k_work_reschedule(&macro_work, K_MSEC(action.delay_ms));
+        /*
+         * Wait for delay before next sequence.
+         */
+        k_work_reschedule(
+            &macro_work,
+            K_MSEC(delay_ms)
+        );
     }
 }
 
