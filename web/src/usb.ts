@@ -117,34 +117,63 @@ export class MacroZUsbDevice {
   }
 
   private tryParseFrame(): { type: number; payload: Uint8Array } | null {
-    for (;;) {
-      if (this.rxBuffer.length < 6) return null;
-
-      if (this.rxBuffer[0] !== SYNC0 || this.rxBuffer[1] !== SYNC1) {
-        this.rxBuffer = this.rxBuffer.slice(1);
-        continue;
-      }
-
-      const payloadLen = this.rxBuffer[3] | (this.rxBuffer[4] << 8);
-      const total = 6 + payloadLen;
-
-      if (this.rxBuffer.length < total) return null;
-
-      const frame = this.rxBuffer.slice(0, total);
-      const expected = checksum(frame.subarray(0, total - 1));
-      if (frame[total - 1] !== expected) {
-        // Drop one byte and search for the next MZ sync sequence.
-        this.rxBuffer = this.rxBuffer.slice(1);
-        continue;
-      }
-
-      this.rxBuffer = this.rxBuffer.slice(total);
-      return {
-        type: frame[2],
-        payload: frame.slice(5, total - 1),
-      };
+  while (true) {
+    // Minimum frame:
+    // sync0 + sync1 + type + length(2) + checksum
+    if (this.rxBuffer.length < 6) {
+      return null;
     }
+
+    const sync0 = this.rxBuffer[0];
+    const sync1 = this.rxBuffer[1];
+
+    if (sync0 !== SYNC0 || sync1 !== SYNC1) {
+      // Drop one byte and search for the next sync sequence.
+      this.rxBuffer = this.rxBuffer.slice(1);
+      continue;
+    }
+
+    const lengthLo = this.rxBuffer[3] ?? 0;
+    const lengthHi = this.rxBuffer[4] ?? 0;
+
+    const payloadLen = lengthLo | (lengthHi << 8);
+
+    const totalLength = 5 + payloadLen + 1;
+
+    if (this.rxBuffer.length < totalLength) {
+      // Wait for the rest of the frame.
+      return null;
+    }
+
+    const frame = this.rxBuffer.slice(0, totalLength);
+
+    const expectedChecksum = checksum(
+      frame.subarray(0, totalLength - 1)
+    );
+
+    const receivedChecksum = frame[totalLength - 1] ?? 0;
+
+    if (receivedChecksum !== expectedChecksum) {
+      // Corrupt frame. Drop one byte and try to resynchronize.
+      this.rxBuffer = this.rxBuffer.slice(1);
+      continue;
+    }
+
+    const type = frame[2] ?? 0;
+
+    const payload = frame.slice(
+      5,
+      5 + payloadLen
+    );
+
+    this.rxBuffer = this.rxBuffer.slice(totalLength);
+
+    return {
+      type,
+      payload,
+    };
   }
+}
 
   private async waitForFrame(type: number, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Uint8Array> {
     const deadline = Date.now() + timeoutMs;
