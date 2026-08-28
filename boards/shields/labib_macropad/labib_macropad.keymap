@@ -1,0 +1,17 @@
+#include <behaviors.dtsi>
+#include <behaviors/macroz_dynamic.dtsi>
+
+/ {
+    keymap {
+        compatible = "zmk,keymap";
+
+        default_layer {
+            display-name = "Dynamic";
+            bindings = <
+                &mzdyn 0 &mzdyn 1 &mzdyn 2
+                &mzdyn 3 &mzdyn 4 &mzdyn 5
+                &mzdyn 6 &mzdyn 7 &mzdyn 8
+            >;
+        };
+    };
+};

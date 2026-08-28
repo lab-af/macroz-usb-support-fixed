@@ -1,0 +1,8 @@
+web/node_modules/
+web/dist/
+.west/
+build/
+modules/
+tools/
+bootloader/
+.venv/

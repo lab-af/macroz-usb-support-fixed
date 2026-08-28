@@ -1,0 +1,9 @@
+if SHIELD_LABIB_MACROPAD
+
+config ZMK_KEYBOARD_NAME
+    default "Labib Macropad"
+
+config ZMK_IDLE_SLEEP_TIMEOUT
+    default 900000
+
+endif

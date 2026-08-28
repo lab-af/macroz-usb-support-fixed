@@ -1,0 +1,14 @@
+#include <dt-bindings/zmk/behaviors.h>
+
+/ {
+    behaviors {
+#if ZMK_BEHAVIOR_OMIT(MACROZ_DYNAMIC)
+        /omit-if-no-ref/
+#endif
+        mzdyn: macroz_dynamic {
+            compatible = "macroz,behavior-dynamic";
+            #binding-cells = <1>;
+            display-name = "MacroZ Dynamic Key";
+        };
+    };
+};

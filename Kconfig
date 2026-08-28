@@ -1,0 +1,30 @@
+menuconfig MACROZ_DYNAMIC
+    bool "MacroZ runtime keymap and macro support"
+    default y
+    depends on DT_HAS_MACROZ_BEHAVIOR_DYNAMIC_ENABLED
+    select SETTINGS
+    help
+      Adds a dynamic key behavior, persistent macro storage, and a BLE
+      configuration service for the MacroZ web configurator.
+
+if MACROZ_DYNAMIC
+
+config MACROZ_LOG_LEVEL
+    int "MacroZ log level"
+    range 0 4
+    default 2
+
+config MACROZ_USB
+    bool "MacroZ USB serial (CDC ACM) configuration transport"
+    default y
+    select USB_CDC_ACM
+    select USB_DEVICE_STACK
+    select SERIAL
+    select UART_INTERRUPT_DRIVEN
+    select UART_LINE_CTRL
+    help
+      Adds a raw USB serial channel alongside the BLE configuration
+      service, so the MacroZ web configurator can also connect over a
+      wired USB connection using the Web Serial API.
+
+endif

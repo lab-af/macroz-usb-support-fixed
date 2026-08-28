@@ -1,0 +1,3 @@
+description: Runtime-configurable MacroZ key behavior
+compatible: "macroz,behavior-dynamic"
+include: one_param.yaml

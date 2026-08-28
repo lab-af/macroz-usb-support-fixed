@@ -1,0 +1,4 @@
+include:
+  - board: nice_nano//zmk
+    shield: labib_macropad
+    artifact-name: labib-macropad-nice-nano-v2

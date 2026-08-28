@@ -1,0 +1,20 @@
+name: Build firmware
+
+on:
+  push:
+    paths:
+      - "boards/**"
+      - "config/**"
+      - "dts/**"
+      - "include/**"
+      - "src/**"
+      - "CMakeLists.txt"
+      - "Kconfig"
+      - "build.yaml"
+      - "zephyr/**"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@641514a97db345f499dd50b0360e594270f008fe

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171713" />
+    <meta name="description" content="Wireless key and macro editor for the MacroZ 3x3 macropad" />
+    <title>MacroZ Studio</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="MacroZ Studio home">
+        <span class="brand-mark">MZ</span>
+        <span>MacroZ <b>Studio</b></span>
+      </a>
+      <div class="connection">
+        <span id="connection-light" class="connection-light"></span>
+        <span id="connection-label">Offline editor</span>
+        <button id="connect" class="button button-primary">Connect via Bluetooth</button>
+        <button id="connect-usb" class="button button-quiet">Connect via USB</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="pad-panel" aria-labelledby="pad-heading">
+        <div class="section-kicker">Device surface</div>
+        <div class="title-row">
+          <h1 id="pad-heading">Nine keys.<br />No fixed purpose.</h1>
+          <span class="revision">3 × 3 / R1</span>
+        </div>
+        <p class="intro">Select a key, then give it a chord or a sequence. Changes stay on the pad.</p>
+        <div id="pad" class="pad" aria-label="Macropad key layout"></div>
+        <div class="pad-footer">
+          <span><i class="legend-dot selected-dot"></i>Selected</span>
+          <span><i class="legend-dot macro-dot"></i>Macro</span>
+          <span id="selection-label">Key 01 selected</span>
+        </div>
+      </section>
+
+      <section class="editor-panel" aria-labelledby="editor-heading">
+        <div class="editor-heading-row">
+          <div>
+            <div class="section-kicker">Assignment</div>
+            <h2 id="editor-heading">Key 01</h2>
+          </div>
+          <div class="segmented" aria-label="Assignment type">
+            <button id="mode-key" class="segment active">Key / chord</button>
+            <button id="mode-macro" class="segment">Macro</button>
+          </div>
+        </div>
+
+        <div id="key-editor" class="editor-body">
+          <label class="field-label" for="key-action">Action</label>
+          <select id="key-action" class="select"></select>
+          <fieldset class="modifier-field">
+            <legend>Hold modifiers</legend>
+            <div id="key-modifiers" class="modifier-grid"></div>
+          </fieldset>
+          <div class="hint-card">
+            <span class="hint-number">01</span>
+            <p>A chord is held for as long as the physical key is held. Use a macro for a tap sequence.</p>
+          </div>
+        </div>
+
+        <div id="macro-editor" class="editor-body hidden">
+          <div class="macro-picker-row">
+            <label class="field-label" for="macro-slot">Macro slot</label>
+            <select id="macro-slot" class="select compact"></select>
+          </div>
+          <div class="timeline-heading">
+            <span>Sequence</span>
+            <span>Delay after step</span>
+          </div>
+          <div id="macro-steps" class="macro-steps"></div>
+          <button id="add-step" class="button button-quiet add-step">+ Add step</button>
+          <p class="limit-note">Up to 255 actions per macro. Each action is tapped for 20 ms.</p>
+        </div>
+
+        <footer class="editor-footer">
+          <div id="message" class="message" role="status">Connect to read the pad, or edit a layout offline.</div>
+          <div class="footer-actions">
+            <button id="reset" class="button button-quiet" disabled>Factory layout</button>
+            <button id="save" class="button button-primary" disabled>Save to pad</button>
+          </div>
+        </footer>
+      </section>
+    </main>
+
+    <div id="unsupported" class="unsupported hidden">
+      Web Bluetooth is unavailable in this browser.
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
