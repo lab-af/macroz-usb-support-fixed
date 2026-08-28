@@ -227,12 +227,12 @@ static void macro_work_handler(struct k_work *work) {
 
     struct macroz_macro_step action;
     bool releasing;
-    uint16_t delay_ms;
+    bool macro_finished;
 
     k_mutex_lock(&state_lock, K_FOREVER);
 
     /*
-     * Start the next queued macro when no macro is running.
+     * Start the next macro only when there is no macro currently running.
      */
     if (!runner_active) {
         while (queue_count > 0) {
@@ -247,25 +247,30 @@ static void macro_work_handler(struct k_work *work) {
 
             runner_step = 0;
             runner_releasing = false;
-            runner_active = runner_macro.length > 0;
 
-            if (runner_active) {
-                break;
+            if (runner_macro.length == 0) {
+                continue;
             }
+
+            runner_active = true;
+            break;
         }
     }
 
+    /*
+     * Nothing to execute.
+     */
     if (!runner_active) {
         k_mutex_unlock(&state_lock);
         return;
     }
 
     /*
-     * Get the current sequence.
+     * Get current sequence.
      */
     action = runner_macro.steps[runner_step];
     releasing = runner_releasing;
-    delay_ms = action.delay_ms;
+    macro_finished = false;
 
     LOG_INF(
         "Macro step %u/%u: page=0x%02X usage=0x%04X mod=0x%02X delay=%u",
@@ -278,24 +283,34 @@ static void macro_work_handler(struct k_work *work) {
     );
 
     if (!releasing) {
+
         /*
-         * PRESS current sequence.
+         * PRESS
          */
         runner_releasing = true;
+
     } else {
+
         /*
-         * RELEASE current sequence.
+         * RELEASE
          */
         runner_releasing = false;
         runner_step++;
 
+        /*
+         * Check whether this was the final sequence.
+         */
         if (runner_step >= runner_macro.length) {
             runner_active = false;
+            macro_finished = true;
         }
     }
 
     k_mutex_unlock(&state_lock);
 
+    /*
+     * Send HID event.
+     */
     uint32_t encoded =
         encoded_action(
             action.usage_page,
@@ -309,21 +324,43 @@ static void macro_work_handler(struct k_work *work) {
         k_uptime_get()
     );
 
+    /*
+     * Schedule the NEXT stage of the SAME macro.
+     */
     if (!releasing) {
+
         /*
-         * Keep the key combination pressed.
+         * Keep current key pressed for 20 ms.
          */
         k_work_reschedule(
             &macro_work,
             MACROZ_TAP_DURATION
         );
-    } else {
+
+    } else if (!macro_finished) {
+
         /*
-         * Wait for delay before next sequence.
+         * Current sequence finished.
+         *
+         * Wait for its configured delay,
+         * then automatically execute the next sequence.
          */
         k_work_reschedule(
             &macro_work,
-            K_MSEC(delay_ms)
+            K_MSEC(action.delay_ms)
+        );
+
+    } else {
+
+        /*
+         * Entire macro finished.
+         *
+         * If another macro is already queued,
+         * execute it automatically.
+         */
+        k_work_reschedule(
+            &macro_work,
+            K_NO_WAIT
         );
     }
 }
@@ -556,30 +593,56 @@ BT_GATT_SERVICE_DEFINE(
 
 static int on_pressed(struct zmk_behavior_binding *binding,
                       struct zmk_behavior_binding_event event) {
+
     uint8_t index = binding->param1;
+
     if (index >= MACROZ_KEY_COUNT) {
         return -EINVAL;
     }
 
     k_mutex_lock(&state_lock, K_FOREVER);
+
     struct macroz_binding assignment = active_config.bindings[index];
+
     if (assignment.kind == MACROZ_BINDING_MACRO) {
+
         if (queue_count < MACROZ_QUEUE_SIZE) {
-            macro_queue[(queue_head + queue_count) % MACROZ_QUEUE_SIZE] = assignment.macro_index;
+
+            macro_queue[(queue_head + queue_count) % MACROZ_QUEUE_SIZE] =
+                assignment.macro_index;
+
             queue_count++;
+
             k_work_schedule(&macro_work, K_NO_WAIT);
+
         } else {
             LOG_WRN("Macro queue full");
         }
+
         k_mutex_unlock(&state_lock);
+
         return ZMK_BEHAVIOR_OPAQUE;
     }
 
-    uint32_t encoded = encoded_action(assignment.usage_page, assignment.usage,
-                                      assignment.modifiers);
-    held_keys[index] = (struct held_key){.active = true, .encoded = encoded};
+    uint32_t encoded =
+        encoded_action(
+            assignment.usage_page,
+            assignment.usage,
+            assignment.modifiers
+        );
+
+    held_keys[index] = (struct held_key){
+        .active = true,
+        .encoded = encoded
+    };
+
     k_mutex_unlock(&state_lock);
-    return raise_zmk_keycode_state_changed_from_encoded(encoded, true, event.timestamp);
+
+    return raise_zmk_keycode_state_changed_from_encoded(
+        encoded,
+        true,
+        event.timestamp
+    );
 }
 
 static int on_released(struct zmk_behavior_binding *binding,
