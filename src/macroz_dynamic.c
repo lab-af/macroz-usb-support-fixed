@@ -1499,50 +1499,32 @@ static int on_pressed(
          */
 
 
-        for (
-            uint8_t macro_index = 0;
-            macro_index < MACROZ_MACRO_COUNT;
-            macro_index++
+        /*
+         * Queue only the macro assigned to this specific key.
+         * (Each key stores which macro slot it triggers in
+         * assignment.macro_index -- we must use that, not loop
+         * over every macro slot on the board.)
+         */
+
+        uint8_t macro_index = assignment.macro_index;
+
+        if (
+            macro_index < MACROZ_MACRO_COUNT &&
+            active_config.macros[macro_index].length > 0
         ) {
+            if (queue_count < MACROZ_QUEUE_SIZE) {
+                macro_queue[
+                    (queue_head +
+                     queue_count) %
+                    MACROZ_QUEUE_SIZE
+                ] = macro_index;
 
-            /*
-             * Skip empty macros.
-             */
-            if (
-                active_config.macros[macro_index]
-                    .length == 0
-            ) {
-                continue;
-            }
-
-
-            /*
-             * Make sure there is room in the queue.
-             */
-            if (
-                queue_count >=
-                MACROZ_QUEUE_SIZE
-            ) {
-
+                queue_count++;
+            } else {
                 LOG_WRN(
                     "Macro queue full"
                 );
-
-                break;
             }
-
-
-            /*
-             * Add this macro to the queue.
-             */
-            macro_queue[
-                (queue_head +
-                 queue_count) %
-                MACROZ_QUEUE_SIZE
-            ] = macro_index;
-
-
-            queue_count++;
         }
 
 
