@@ -219,64 +219,63 @@ static void save_work_handler(struct k_work *work) {
 
 K_WORK_DELAYABLE_DEFINE(save_work, save_work_handler);
 
-static void macro_work_handler(struct k_work *work);
-K_WORK_DELAYABLE_DEFINE(macro_work, macro_work_handler);
-
 static void macro_work_handler(struct k_work *work) {
     ARG_UNUSED(work);
 
     struct macroz_macro_step action;
     bool releasing;
-    bool macro_finished;
+
+    LOG_INF("=== MACRO WORK START ===");
 
     k_mutex_lock(&state_lock, K_FOREVER);
 
     /*
-     * Start the next macro only when there is no macro currently running.
+     * Start a queued macro if nothing is currently running.
      */
     if (!runner_active) {
-        while (queue_count > 0) {
+        LOG_INF("No runner active. Queue count = %u", queue_count);
+
+        if (queue_count > 0) {
             uint8_t macro_index = macro_queue[queue_head];
 
             queue_head = (queue_head + 1) % MACROZ_QUEUE_SIZE;
             queue_count--;
 
-            memcpy(&runner_macro,
-                   &active_config.macros[macro_index],
-                   sizeof(runner_macro));
+            memcpy(
+                &runner_macro,
+                &active_config.macros[macro_index],
+                sizeof(runner_macro)
+            );
 
             runner_step = 0;
             runner_releasing = false;
+            runner_active = runner_macro.length > 0;
 
-            if (runner_macro.length == 0) {
-                continue;
-            }
-
-            runner_active = true;
-            break;
+            LOG_INF(
+                "Starting macro %u, length=%u",
+                macro_index,
+                runner_macro.length
+            );
         }
     }
 
-    /*
-     * Nothing to execute.
-     */
     if (!runner_active) {
+        LOG_INF("Nothing to execute");
         k_mutex_unlock(&state_lock);
         return;
     }
 
     /*
-     * Get current sequence.
+     * Current step.
      */
     action = runner_macro.steps[runner_step];
     releasing = runner_releasing;
-    macro_finished = false;
 
     LOG_INF(
-        "Macro step %u/%u: page=0x%02X usage=0x%04X mod=0x%02X delay=%u",
+        "STEP %u/%u | %s | usage=0x%04X mod=0x%02X delay=%u",
         runner_step + 1,
         runner_macro.length,
-        action.usage_page,
+        releasing ? "RELEASE" : "PRESS",
         action.usage,
         action.modifiers,
         action.delay_ms
@@ -297,14 +296,14 @@ static void macro_work_handler(struct k_work *work) {
         runner_releasing = false;
         runner_step++;
 
-        /*
-         * Check whether this was the final sequence.
-         */
         if (runner_step >= runner_macro.length) {
             runner_active = false;
-            macro_finished = true;
+
+            LOG_INF("=== MACRO FINISHED ===");
         }
     }
+
+    bool still_running = runner_active;
 
     k_mutex_unlock(&state_lock);
 
@@ -318,33 +317,38 @@ static void macro_work_handler(struct k_work *work) {
             action.modifiers
         );
 
-    raise_zmk_keycode_state_changed_from_encoded(
+    int ret = raise_zmk_keycode_state_changed_from_encoded(
         encoded,
         !releasing,
         k_uptime_get()
     );
 
+    LOG_INF(
+        "HID event sent: %s ret=%d",
+        releasing ? "RELEASE" : "PRESS",
+        ret
+    );
+
     /*
-     * Schedule the NEXT stage of the SAME macro.
+     * Continue automatically.
      */
     if (!releasing) {
 
-        /*
-         * Keep current key pressed for 20 ms.
-         */
+        LOG_INF("Scheduling RELEASE in %d ms", 
+                (int)MACROZ_TAP_DURATION.ticks);
+
         k_work_reschedule(
             &macro_work,
             MACROZ_TAP_DURATION
         );
 
-    } else if (!macro_finished) {
+    } else if (still_running) {
 
-        /*
-         * Current sequence finished.
-         *
-         * Wait for its configured delay,
-         * then automatically execute the next sequence.
-         */
+        LOG_INF(
+            "Scheduling NEXT STEP in %u ms",
+            action.delay_ms
+        );
+
         k_work_reschedule(
             &macro_work,
             K_MSEC(action.delay_ms)
@@ -353,16 +357,18 @@ static void macro_work_handler(struct k_work *work) {
     } else {
 
         /*
-         * Entire macro finished.
-         *
-         * If another macro is already queued,
-         * execute it automatically.
+         * Macro is finished.
+         * Check whether another macro is queued.
          */
+        LOG_INF("Macro finished. Checking queue.");
+
         k_work_reschedule(
             &macro_work,
             K_NO_WAIT
         );
     }
+
+    LOG_INF("=== MACRO WORK END ===");
 }
 
 static int settings_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg) {
